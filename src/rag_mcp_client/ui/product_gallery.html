@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hình ảnh sản phẩm Đông Hải</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+      --surface: light-dark(#fff, #191919);
+      --raised: light-dark(#fff, #242424);
+      --muted-surface: light-dark(#f6f4f1, #111);
+      --text: light-dark(#171717, #f7f7f5);
+      --muted: light-dark(#696969, #aaa9a5);
+      --border: light-dark(#e7e3dc, #3a3a3a);
+      --accent: #d61f2c;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: transparent; color: var(--text); }
+    body { padding: 8px; }
+
+    .shell {
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: var(--surface);
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 66px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .mark {
+      display: grid;
+      flex: 0 0 auto;
+      width: 40px;
+      height: 40px;
+      place-items: center;
+      border-radius: 12px;
+      color: #fff;
+      background: linear-gradient(145deg, #e52b38, #a90f19);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .heading { min-width: 0; }
+    .eyebrow {
+      margin-bottom: 2px;
+      color: var(--accent);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      overflow: hidden;
+      font-size: 15px;
+      line-height: 1.3;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    #meta {
+      margin-left: auto;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    #status { padding: 24px; color: var(--muted); text-align: center; }
+
+    #gallery {
+      display: flex;
+      gap: 10px;
+      padding: 12px;
+      overflow-x: auto;
+      scroll-snap-type: inline mandatory;
+      scrollbar-width: thin;
+    }
+
+    figure {
+      flex: 1 0 min(78vw, 330px);
+      margin: 0;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 15px;
+      background: var(--raised);
+      scroll-snap-align: start;
+    }
+
+    button {
+      position: relative;
+      display: block;
+      width: 100%;
+      height: clamp(250px, 40vw, 390px);
+      padding: 0;
+      overflow: hidden;
+      border: 0;
+      cursor: zoom-in;
+      background: #fff;
+    }
+
+    img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      padding: 8px;
+      object-fit: contain;
+    }
+
+    figcaption {
+      padding: 10px 12px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    #viewer[hidden], #gallery[hidden] { display: none; }
+    #viewer {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      padding: 14px;
+      background: rgb(10 10 10 / .94);
+    }
+
+    .viewer-bar { display: flex; align-items: center; color: #fff; }
+    #viewer-title { font-size: 13px; font-weight: 700; }
+    #close {
+      width: 36px;
+      height: 36px;
+      margin-left: auto;
+      border: 1px solid rgb(255 255 255 / .2);
+      border-radius: 50%;
+      color: #fff;
+      background: rgb(255 255 255 / .1);
+      font-size: 20px;
+    }
+    #viewer-image { width: 100%; height: 100%; padding: 0; object-fit: contain; }
+
+    @media (min-width: 700px) {
+      #gallery[data-count="1"] figure { max-width: 560px; margin-inline: auto; }
+      #gallery[data-count="2"] figure { flex-basis: calc(50% - 5px); }
+      #gallery[data-count="3"] figure { flex-basis: calc(33.333% - 7px); }
+    }
+  </style>
+</head>
+<body>
+  <section class="shell" aria-live="polite">
+    <header>
+      <span class="mark" aria-hidden="true">ĐH</span>
+      <div class="heading">
+        <div class="eyebrow">Đông Hải Product</div>
+        <h1 id="title">Hình ảnh sản phẩm</h1>
+      </div>
+      <span id="meta"></span>
+    </header>
+    <div id="status">Đang nhận hình ảnh…</div>
+    <div id="gallery" hidden></div>
+  </section>
+
+  <div id="viewer" role="dialog" aria-modal="true" hidden>
+    <div class="viewer-bar">
+      <span id="viewer-title"></span>
+      <button id="close" type="button" aria-label="Đóng">×</button>
+    </div>
+    <img id="viewer-image" alt="">
+  </div>
+
+  <script>
+    (() => {
+      const titleEl = document.getElementById("title");
+      const metaEl = document.getElementById("meta");
+      const statusEl = document.getElementById("status");
+      const galleryEl = document.getElementById("gallery");
+      const viewerEl = document.getElementById("viewer");
+      const viewerTitleEl = document.getElementById("viewer-title");
+      const viewerImageEl = document.getElementById("viewer-image");
+      const closeEl = document.getElementById("close");
+      const pending = new Map();
+      let nextId = 1;
+
+      function notifySize() {
+        window.parent.postMessage({
+          jsonrpc: "2.0",
+          method: "ui/notifications/size-changed",
+          params: {
+            width: document.documentElement.scrollWidth,
+            height: document.documentElement.scrollHeight,
+          },
+        }, "*");
+      }
+
+      function request(method, params) {
+        const id = nextId++;
+        window.parent.postMessage({ jsonrpc: "2.0", id, method, params }, "*");
+        return new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
+      }
+
+      function validImage(block) {
+        const mimeType = block?.mimeType || block?.mime_type;
+        return block && block.type === "image"
+          && typeof block.data === "string" && block.data.length > 0
+          && typeof mimeType === "string"
+          && mimeType.startsWith("image/");
+      }
+
+      function normalizeImage(block) {
+        return {
+          type: "image",
+          data: block.data,
+          mimeType: block.mimeType || block.mime_type,
+        };
+      }
+
+      function validRemoteImage(url) {
+        if (typeof url !== "string" || !url) return false;
+        try {
+          const parsed = new URL(url);
+          return parsed.protocol === "https:" && parsed.hostname === "cdn.shopify.com";
+        } catch (_) {
+          return false;
+        }
+      }
+
+      function findImages(value, depth = 0, seen = new Set()) {
+        if (!value || depth > 7 || typeof value !== "object" || seen.has(value)) {
+          return [];
+        }
+        seen.add(value);
+        if (validImage(value)) return [normalizeImage(value)];
+        if (Array.isArray(value)) {
+          const direct = value.filter(validImage).map(normalizeImage);
+          if (direct.length) return direct;
+          for (const item of value) {
+            const found = findImages(item, depth + 1, seen);
+            if (found.length) return found;
+          }
+          return [];
+        }
+        const priorityKeys = [
+          "productImages", "images", "content", "mcp_tool_result",
+          "call_tool_result", "mcpToolResult", "callToolResult", "result", "_meta"
+        ];
+        for (const key of priorityKeys) {
+          if (key in value) {
+            const found = findImages(value[key], depth + 1, seen);
+            if (found.length) return found;
+          }
+        }
+        for (const child of Object.values(value)) {
+          const found = findImages(child, depth + 1, seen);
+          if (found.length) return found;
+        }
+        return [];
+      }
+
+      function findProduct(value, depth = 0, seen = new Set()) {
+        if (!value || depth > 7 || typeof value !== "object" || seen.has(value)) {
+          return null;
+        }
+        seen.add(value);
+        if (typeof value.product_code === "string" || typeof value.title === "string") {
+          return value;
+        }
+        for (const key of ["product", "structuredContent", "structured_content", "toolOutput", "_meta", "mcp_tool_result", "call_tool_result"]) {
+          if (key in value) {
+            const found = findProduct(value[key], depth + 1, seen);
+            if (found) return found;
+          }
+        }
+        for (const child of Object.values(value)) {
+          const found = findProduct(child, depth + 1, seen);
+          if (found) return found;
+        }
+        return null;
+      }
+
+      function render(result) {
+        result = result?.result || result;
+        const output = result?.structuredContent
+          || result?.structured_content
+          || result?.toolOutput
+          || {};
+        const metadata = {
+          ...(window.openai?.toolResponseMetadata || {}),
+          ...(result?.meta || {}),
+          ...(result?._meta || {}),
+        };
+        const product = findProduct(output) || findProduct(metadata) || {};
+        let images = Array.isArray(result?.content)
+          ? result.content.filter(validImage).map(normalizeImage)
+          : [];
+        if (!images.length && Array.isArray(output.images)) {
+          images = output.images.filter(validImage).map(normalizeImage);
+        }
+        if (!images.length) images = findImages(metadata);
+        if (!images.length) images = findImages(result);
+        if (!images.length) {
+          const remoteUrls = Array.isArray(product.image_urls)
+            ? product.image_urls
+            : (Array.isArray(output.image_urls) ? output.image_urls : []);
+          images = remoteUrls
+            .filter(validRemoteImage)
+            .slice(0, 3)
+            .map((src) => ({ type: "remote-image", src }));
+        }
+
+        titleEl.textContent = product.title || output.title || "Hình ảnh sản phẩm";
+        const selectedColor = product.color || output.color || output.requested_color;
+        metaEl.textContent = [product.product_code || output.product_code, selectedColor]
+          .filter(Boolean).join(" · ");
+        galleryEl.replaceChildren();
+
+        if (!images.length) {
+          statusEl.textContent = "Không thể tải hình ảnh sản phẩm.";
+          statusEl.hidden = false;
+          galleryEl.hidden = true;
+          requestAnimationFrame(notifySize);
+          return;
+        }
+
+        galleryEl.dataset.count = String(images.length);
+        images.slice(0, 3).forEach((block, index) => {
+          const src = block.src
+            || `data:${block.mimeType};base64,${block.data}`;
+          const figure = document.createElement("figure");
+          const button = document.createElement("button");
+          const image = document.createElement("img");
+          const caption = document.createElement("figcaption");
+
+          button.type = "button";
+          image.src = src;
+          image.alt = `${output.title || "Sản phẩm"} - ảnh ${index + 1}`;
+          image.loading = "eager";
+          caption.textContent = `${selectedColor ? `Màu ${selectedColor} · ` : ""}Ảnh ${index + 1}`;
+          button.appendChild(image);
+          button.addEventListener("click", () => {
+            viewerImageEl.src = src;
+            viewerImageEl.alt = image.alt;
+            viewerTitleEl.textContent = image.alt;
+            viewerEl.hidden = false;
+          });
+          figure.append(button, caption);
+          galleryEl.appendChild(figure);
+        });
+
+        statusEl.hidden = true;
+        galleryEl.hidden = false;
+        requestAnimationFrame(notifySize);
+      }
+
+      closeEl.addEventListener("click", () => {
+        viewerEl.hidden = true;
+        viewerImageEl.removeAttribute("src");
+      });
+      window.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") closeEl.click();
+      });
+
+      window.addEventListener("message", (event) => {
+        if (event.source !== window.parent) return;
+        const message = event.data;
+        if (!message || message.jsonrpc !== "2.0") return;
+        if (message.id !== undefined && pending.has(message.id)) {
+          const handler = pending.get(message.id);
+          pending.delete(message.id);
+          if (message.error) handler.reject(message.error);
+          else handler.resolve(message.result);
+          return;
+        }
+        if (message.method === "ui/notifications/tool-result") {
+          render(message.params);
+        }
+      }, { passive: true });
+
+      window.addEventListener("openai:set_globals", (event) => {
+        const globals = event.detail?.globals;
+        const output = globals?.toolOutput ?? window.openai?.toolOutput;
+        const metadata = globals?.toolResponseMetadata
+          ?? window.openai?.toolResponseMetadata;
+        if (output || metadata) {
+          render({ structuredContent: output, _meta: metadata });
+        }
+      }, { passive: true });
+
+      function renderGlobals() {
+        const output = window.openai?.toolOutput;
+        const metadata = window.openai?.toolResponseMetadata;
+        if (output || metadata) {
+          render({ structuredContent: output, _meta: metadata });
+        }
+      }
+
+      renderGlobals();
+
+      request("ui/initialize", {
+        protocolVersion: "2025-06-18",
+        appInfo: { name: "Dong Hai Product Gallery", version: "1.2.0" },
+        appCapabilities: { availableDisplayModes: ["inline", "fullscreen"] },
+      }).then(() => {
+        window.parent.postMessage({
+          jsonrpc: "2.0",
+          method: "ui/notifications/initialized",
+          params: {},
+        }, "*");
+        renderGlobals();
+        setTimeout(renderGlobals, 100);
+        setTimeout(renderGlobals, 500);
+        setTimeout(renderGlobals, 1000);
+        setTimeout(renderGlobals, 2000);
+        setTimeout(renderGlobals, 4000);
+      }).catch(() => {});
+
+      new ResizeObserver(notifySize).observe(document.body);
+    })();
+  </script>
+</body>
+</html>

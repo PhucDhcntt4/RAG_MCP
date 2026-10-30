@@ -1,0 +1,252 @@
+QUY TRINH XAY DUNG VA KET NOI RAG MCP VOI CHATGPT
+=================================================
+
+1. KIEN TRUC
+------------
+
+Nguoi dung
+    -> ChatGPT (LLM tao cau tra loi)
+    -> MCP Server cong khai: https://<domain>/mcp
+    -> RAG MCP Client chay local: http://127.0.0.1:8001/mcp
+    -> RAG Search API: http://127.0.0.1:8000/api/v1/knowledge/search
+    -> Kho tri thuc
+
+Vai tro:
+- RAG Service tim noi dung va tai san trong kho tri thuc.
+- RAG MCP Client chuyen RAG API thanh cac MCP tools cho ChatGPT.
+- ngrok tao dia chi HTTPS cong khai tro ve MCP local.
+- ChatGPT chon tool, nhan ket qua va dung LLM de tao cau tra loi.
+
+
+2. DIEU KIEN CAN
+----------------
+
+- Windows va Python 3.11 tro len.
+- RAG Service dang hoat dong tai cong 8000.
+- Co SEARCH_API_KEY hop le cua RAG Service.
+- Da cai ngrok va dang nhap ngrok.
+- ChatGPT co quyen them Custom MCP Server/Plugin.
+
+Khong ghi API key vao source code, Git hoac tai lieu chia se.
+
+
+3. CAI DAT DU AN MCP
+--------------------
+
+Mo CMD:
+
+cd /d "C:\D\ĐÔNG HẢI\DATA\RAG_MCP_CLIENT"
+py -3.11 -m venv .venv
+.venv\Scripts\python.exe -m pip install --upgrade pip
+.venv\Scripts\python.exe -m pip install -e .
+
+Thu vien MCP phai la phien ban 2.3 tro len va nho hon 3 de ho tro
+giao thuc MCP 2026-07-28 ma ChatGPT dang su dung.
+
+
+4. CAU HINH BIEN MOI TRUONG
+---------------------------
+
+Tao file .env tu .env.example:
+
+copy .env.example .env
+
+Noi dung .env:
+
+SEARCH_API_KEY=<SEARCH_API_KEY_CUA_BAN>
+RAG_SEARCH_URL=http://127.0.0.1:8000/api/v1/knowledge/search
+MCP_HOST=127.0.0.1
+MCP_PORT=8001
+MCP_PATH=/mcp
+
+MCP chi can SEARCH_API_KEY. Khong dua ADMIN_API_KEY vao MCP neu khong co
+chuc nang quan tri bat buoc.
+
+
+5. KIEM TRA RAG SERVICE TRUOC
+-----------------------------
+
+Dam bao RAG Service dang chay tai cong 8000, sau do chay:
+
+.venv\Scripts\python.exe -c "import asyncio; from rag_mcp_client.models import SearchRequest; from rag_mcp_client.rag_client import search_knowledge; r=asyncio.run(search_knowledge(SearchRequest(query='Chinh sach bao hanh la gi?', top_k=3))); print(r.status, len(r.sources), r.elapsed_ms)"
+
+Ket qua mong doi:
+
+knowledge_found 3 <thoi-gian-ms>
+
+Neu gap HTTP 401:
+- Kiem tra SEARCH_API_KEY trong .env.
+- Xac nhan RAG API dung header Bearer voi key nay.
+- Khoi dong lai MCP sau khi sua .env.
+
+
+6. CHAY MCP SERVER
+------------------
+
+Mo CMD thu nhat:
+
+cd /d "C:\D\ĐÔNG HẢI\DATA\RAG_MCP_CLIENT"
+.venv\Scripts\python.exe -m rag_mcp_client.server
+
+Ket qua mong doi:
+
+Uvicorn running on http://127.0.0.1:8001
+
+Giu cua so CMD nay mo.
+
+MCP hien cung cap hai tools:
+- search_knowledge: tim noi dung trong kho tri thuc.
+- get_knowledge_asset: lay anh theo asset ID.
+
+
+7. KIEM TRA BANG MCP INSPECTOR (KHUYEN NGHI)
+-------------------------------------------
+
+Chay MCP Inspector va ket noi bang Streamable HTTP:
+
+http://127.0.0.1:8001/mcp
+
+Chon tool search_knowledge va thu JSON:
+
+{
+  "query": "Chinh sach bao hanh la gi?",
+  "categories": null,
+  "doc_type_id": null,
+  "group_ids": null,
+  "top_k": 3
+}
+
+Phai nhan success=true, status=knowledge_found va danh sach sources.
+
+
+8. TAO DIA CHI HTTPS BANG NGROK
+-------------------------------
+
+Mo CMD thu hai:
+
+ngrok http 8001 --host-header=rewrite
+
+Ket qua vi du:
+
+Forwarding https://<ngrok-domain> -> http://localhost:8001
+
+URL MCP de dua vao ChatGPT la:
+
+https://<ngrok-domain>/mcp
+
+Giu cua so ngrok mo. Neu ngrok dung hoac may chu tat, plugin se mat ket noi.
+Neu domain ngrok thay doi, phai cap nhat URL trong ChatGPT.
+
+
+9. KET NOI VOI CHATGPT
+----------------------
+
+Trong ChatGPT:
+
+1. Mo Plugins.
+2. Chon Add Servers -> Add manually/Add custom MCP server.
+3. Name: Donghai Knowledge.
+4. Description: Tim kiem chinh sach va thong tin trong kho tri thuc Dong Hai.
+5. Connectivity: Server URL.
+6. URL: https://<ngrok-domain>/mcp
+7. Authentication khi thu nghiem: No authentication.
+8. Danh dau xac nhan rui ro va chon Create as a plugin.
+9. Mo plugin, chon Install/Enable.
+10. Tao cuoc tro chuyen moi va chon plugin truoc khi dat cau hoi.
+
+Sau khi thay doi schema, tool, metadata hoac UI:
+- Khoi dong lai MCP Server.
+- Vao Connectivity cua plugin va chon Refresh.
+- Tao cuoc tro chuyen moi de kiem tra.
+
+
+10. THU NGHIEM CUOI
+-------------------
+
+Thu cac cau hoi:
+
+- "Chinh sach bao hanh Dong Hai la gi?"
+- "Tim thong tin ve logo thuong hieu Dong Hai."
+- "Hay lay va hien thi hinh anh logo trong tai lieu."
+
+Log thanh cong thuong co:
+
+POST /mcp HTTP/1.1 200 OK
+POST http://127.0.0.1:8000/api/v1/knowledge/search 200 OK
+GET  http://127.0.0.1:8000/api/v1/knowledge/assets/<id> 200 OK
+
+Luu y ve anh:
+- MCP co the tra ImageContent PNG thanh cong nhung ChatGPT khong dam bao tu
+  chen anh vao cau tra loi van ban.
+- Neu can chac chan hien thi anh trong ChatGPT, can xay MCP App UI/widget va
+  gan tool voi _meta.ui.resourceUri.
+
+
+11. THU TU KHOI DONG MOI NGAY
+-----------------------------
+
+1. Khoi dong RAG Service tai cong 8000.
+2. Khoi dong RAG MCP Client tai cong 8001.
+3. Khoi dong ngrok tro vao cong 8001.
+4. Xac nhan URL ngrok va URL plugin giong nhau, co duoi /mcp.
+5. Bat plugin trong ChatGPT va thu tren cuoc tro chuyen moi.
+
+
+12. DUNG CAC DICH VU
+--------------------
+
+Tai cua so ngrok: nhan Ctrl+C.
+Tai cua so MCP Server: nhan Ctrl+C.
+Dung RAG Service bang cach Ctrl+C tai terminal cua du an RAG.
+
+
+13. LOI THUONG GAP
+------------------
+
+HTTP 401 tu RAG:
+- SEARCH_API_KEY sai, thieu hoac RAG Service chua nhan Bearer token.
+
+Errno 10048 / address already in use:
+- Cong 8001 da co mot MCP Server dang chay.
+- Khong mo MCP Server lan thu hai; tat tien trinh cu bang Ctrl+C.
+
+POST /mcp 400 Bad Request tu ChatGPT:
+- SDK MCP cu khong ho tro protocol 2026-07-28.
+- Cai mcp[cli]>=2.3,<3 va dung MCPServer thay cho FastMCP cua SDK 1.x.
+
+MCP response was invalid:
+- Kiem tra outputSchema phu hop structuredContent.
+- Kiem tra ket qua tool la CallToolResult hop le.
+- Refresh connection va thu lai trong cuoc tro chuyen moi.
+
+ChatGPT khong ket noi duoc:
+- Kiem tra RAG, MCP va ngrok deu dang chay.
+- URL phai la HTTPS va co /mcp.
+- Kiem tra log ngrok va log MCP.
+
+
+14. TRIỂN KHAI THAT/PRODUCTION
+-----------------------------
+
+Khong nen dung ngrok va No authentication cho he thong chinh thuc.
+
+Nen thuc hien:
+- Deploy RAG Service va MCP Server len VPS/cloud chay 24/7.
+- Dung domain HTTPS co dinh.
+- Them OAuth hoac co che xac thuc phu hop.
+- Luu secret trong secret manager/bien moi truong cua server.
+- Gioi han quyen truy cap kho tri thuc theo nguoi dung/nhom.
+- Them timeout, rate limit, logging va monitoring.
+- Publish plugin trong ChatGPT Workspace neu chi dung noi bo.
+- Chi submit public plugin neu muon phat hanh rong rai.
+
+
+15. BAO MAT
+-----------
+
+- Khong commit file .env.
+- Khong gui API key qua chat, anh chup hoac tai lieu.
+- Thu hoi va tao lai key neu key da bi lo.
+- No authentication chi phu hop cho thu nghiem ngan han.
+- Bat ky ai co URL ngrok deu co the goi MCP neu server khong co xac thuc.
+
